@@ -142,14 +142,17 @@ public:
                 break;
             else if (i < _buttons.size())
             {
-                pressAddButton(solve, _buttons[i], presses[i]);
                 int isSolved = isAddSolved(solve);
+
                 if (isSolved < 0)
+                {
                     i++;
+                }
                 else if (isSolved > 0)
                 {
                     resetAddButton(solve, _buttons[i], presses[i]);
                     i--;
+                    if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
                 }
                 else
                 {
@@ -159,26 +162,37 @@ public:
                         lowest_solve = total_presses;
                     resetAddButton(solve, _buttons[i], presses[i]);
                     i--;
+                    if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
+                    std::cout << "solve found: " << total_presses << std::endl;
                 }
             }
             else
             {
                 i--;
+                int j = 0;
+                for (; j < _add_req.size(); j++)
+                    if (solve[j] < _add_req[j]) break;
                 int times_to_press =
-                    _add_req[_buttons[i][0]] - solve[_buttons[i][0]];
+                    _add_req[_buttons[i][j]] - solve[_buttons[i][j]];
+                pressAddButtonN(solve, _buttons[i], presses[i], times_to_press);
                 int isSolved = isAddSolved(solve);
+
                 if (isSolved == 0)
                 {
                     int total_presses = std::accumulate(
                         presses.begin(), presses.end(), 0);
                     if (total_presses < lowest_solve)
+                    {
                         lowest_solve = total_presses;
+                    }
+                    std::cout << "solve found: " << total_presses << std::endl;
                 }
                 resetAddButton(solve, _buttons[i], presses[i]);
                 i--;
+                if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
             }
         }
-        std::cout << lowest_solve << std::endl;
+        std::cout << "lowest: " << lowest_solve << std::endl;
         return lowest_solve;
     }
 };
@@ -202,7 +216,7 @@ int main(int ac, char** av)
         Machine machine(line);
 
         count_toggle_presses += machine.getMinToggleSolve();
-        // count_add_presses += machine.getMinAddSolve();
+        count_add_presses += machine.getMinAddSolve();
     }
 
     std::cout << count_toggle_presses << std::endl;
