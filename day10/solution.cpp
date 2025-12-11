@@ -1,4 +1,5 @@
 
+#include <algorithm>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -14,6 +15,14 @@ private:
     std::vector<std::vector<int>> _buttons;
     std::string _toggle_req;
     std::vector<int> _add_req;
+
+    enum GroupCompare {
+        GROUP_MATCH,
+        GROUP_A_IN_B,
+        GROUP_B_IN_A,
+        GROUP_UNIQUE,
+        GROUP_MIXED
+    };
 
 public:
     Machine(std::string details)
@@ -130,11 +139,164 @@ public:
         return isSolved;
     }
 
+    GroupCompare compareGroups(
+        const std::vector<int>& a,
+        const std::vector<int>& b)
+    {
+
+        std::cout << "compare: [";
+        for (auto button : a)
+        {
+            std::cout << button << ", ";
+        }
+        std::cout << "\b\b], [";
+        for (auto button : b)
+        {
+            std::cout << button << ", ";
+        }
+        std::cout << "\b\b]" << std::endl;
+
+        bool a_in_b = true;
+        bool b_in_a = true;
+        bool related = false;
+
+        if (a.size() < b.size())
+        {
+            b_in_a = false;
+            for (auto aVal : a)
+            {
+                if (std::find(b.begin(), b.end(), aVal) == b.end())
+                    a_in_b = false;
+                else
+                    related = true;
+            }
+        }
+        else
+        {
+            if (a.size() != b.size())
+                a_in_b = false;
+            for (auto bVal : b)
+            {
+                if (std::find(a.begin(), a.end(), bVal) == a.end())
+                {
+                    a_in_b = false;
+                    b_in_a = false;
+                }
+                else
+                    related = true;
+            }
+        }
+
+        std::cout << "a_in_b:" << a_in_b << ", b_in_a:" << b_in_a << ", related:" << related << std::endl;
+
+        if (a_in_b && b_in_a)
+            return GROUP_MATCH;
+        if (a_in_b)
+            return GROUP_A_IN_B;
+        if (b_in_a)
+            return GROUP_B_IN_A;
+        if (related)
+            return GROUP_MIXED;
+        return GROUP_UNIQUE;
+    }
+
+    void removeGroup(
+        std::pair<int, std::vector<int>>& remove,
+        std::pair<int, std::vector<int>>& from)
+    {
+        from.first -= remove.first;
+
+        for (auto button : remove.second)
+        {
+            from.second.erase(
+                std::find(from.second.begin(), from.second.end(), button));
+        }
+    }
+
+    std::vector<std::pair<int, int>> calcAddSolveMinMax()
+    {
+        std::vector<std::pair<int, std::vector<int>>> groups(_add_req.size());
+
+        for (int i = 0; i < _add_req.size(); i++)
+            groups[i].first = _add_req[i];
+
+        for (int i = 0; i < _buttons.size(); i++)
+        {
+            for (int num : _buttons[i])
+            {
+                groups[num].second.push_back(i);
+            }
+        }
+        
+        int num_changes = 0;
+        do
+        {
+            num_changes = 0;
+            for (int a = 0; a < groups.size() - 1; a++)
+            {
+                for (int b = a + 1; b < groups.size(); b++)
+                {
+                    switch (compareGroups(groups[a].second, groups[b].second))
+                    {
+                        case GROUP_A_IN_B:
+                            std::cout << "removing group" << std::endl;
+                            removeGroup(groups[a], groups[b]);
+                            num_changes++;
+                        break;
+                        case GROUP_B_IN_A:
+                            std::cout << "removing group" << std::endl;
+                            removeGroup(groups[b], groups[a]);
+                            num_changes++;
+                        break;
+                        default:
+                        break;
+                    }
+                }
+            }
+        } while (num_changes > 0);
+
+        std::vector<std::pair<int, int>> min_max(_buttons.size());
+        for (auto& pair : min_max)
+            pair.second = INT_MAX;
+
+        for (auto& group : groups)
+        {
+            std::cout << "[";
+            for (auto button : group.second)
+            {
+                std::cout << button << ", ";
+                min_max[button].second =
+                    std::min(min_max[button].second, group.first);
+                if (group.second.size() == 1)
+                    min_max[button].first = group.first;
+            }
+            std::cout << "\b\b]" << std::endl;
+        }
+
+        for (int i = 0; i < min_max.size(); i++)
+        {
+            std::cout << "minmax btn: " << i
+                << "(" << min_max[i].first
+                << ", " << min_max[i].second << ")" << std::endl;
+        }
+
+        return min_max;
+    }
+
     int getMinAddSolve()
     {
         std::vector<int> solve(_add_req.size());
         std::vector<int> presses(_buttons.size());
+        std::vector<std::pair<int, int>> min_max = calcAddSolveMinMax();
+        std::cout << "Starting add search..." << std::endl;
+
+        for (int i = 0; i < solve.size(); i++)
+        {
+            solve[i] = min_max[i].first;
+        }
+
         int lowest_solve = INT_MAX;
+        int checks = 0;
         int i = 0;
         while (true)
         {
@@ -143,6 +305,7 @@ public:
             else if (i < _buttons.size())
             {
                 int isSolved = isAddSolved(solve);
+                checks++;
 
                 if (isSolved < 0)
                 {
@@ -151,6 +314,7 @@ public:
                 else if (isSolved > 0)
                 {
                     resetAddButton(solve, _buttons[i], presses[i]);
+                    pressAddButtonN(solve, _buttons[i], presses[i], min_max[i].first);
                     i--;
                     if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
                 }
@@ -161,6 +325,7 @@ public:
                     if (total_presses < lowest_solve)
                         lowest_solve = total_presses;
                     resetAddButton(solve, _buttons[i], presses[i]);
+                    pressAddButtonN(solve, _buttons[i], presses[i], min_max[i].first);
                     i--;
                     if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
                     std::cout << "solve found: " << total_presses << std::endl;
@@ -176,6 +341,7 @@ public:
                     _add_req[_buttons[i][j]] - solve[_buttons[i][j]];
                 pressAddButtonN(solve, _buttons[i], presses[i], times_to_press);
                 int isSolved = isAddSolved(solve);
+                checks++;
 
                 if (isSolved == 0)
                 {
@@ -188,11 +354,13 @@ public:
                     std::cout << "solve found: " << total_presses << std::endl;
                 }
                 resetAddButton(solve, _buttons[i], presses[i]);
+                pressAddButtonN(solve, _buttons[i], presses[i], min_max[i].first);
                 i--;
                 if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
             }
         }
-        std::cout << "lowest: " << lowest_solve << std::endl;
+        std::cout << "lowest: " << lowest_solve
+            << " with " << checks << " checks\n" << std::endl;
         return lowest_solve;
     }
 };
@@ -219,6 +387,6 @@ int main(int ac, char** av)
         count_add_presses += machine.getMinAddSolve();
     }
 
-    std::cout << count_toggle_presses << std::endl;
-    std::cout << count_add_presses << std::endl;
+    std::cout << "toggle total: " << count_toggle_presses << std::endl;
+    std::cout << "add total: " << count_add_presses << std::endl;
 }
