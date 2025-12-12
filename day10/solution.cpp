@@ -206,7 +206,7 @@ public:
         }
     }
 
-    std::vector<std::pair<int, int>> calcAddSolveMinMax()
+    std::vector<std::pair<int, std::vector<int>>> calcAddGroups()
     {
         std::vector<std::pair<int, std::vector<int>>> groups(_add_req.size());
 
@@ -246,51 +246,95 @@ public:
             }
         } while (num_changes > 0);
 
-        std::vector<std::pair<int, int>> min_max(_buttons.size());
-        for (auto& pair : min_max)
-            pair.second = INT_MAX;
-
         // print groups
         for (auto& group : groups)
         {
-            std::cout << "[";
-            for (auto button : group.second)
-            {
-                std::cout << button << ", ";
-                min_max[button].second =
-                    std::min(min_max[button].second, group.first);
-                if (group.second.size() == 1)
-                    min_max[button].first = group.first;
-            }
-            std::cout << "\b\b]" << std::endl;
+            std::cout << group.first << " ";
+            printIntVector(group.second, "[]");
         }
+        
 
-        // print minmaxes
-        for (int i = 0; i < min_max.size(); i++)
+        return groups;
+    }
+
+    int getMin(
+        std::vector<int> presses,
+        std::vector<std::pair<int, std::vector<int>>> groups,
+        int button)
+    {
+        int min = 0;
+        for (auto& group : groups)
         {
-            std::cout << "minmax btn: " << i
-                << "(" << min_max[i].first
-                << ", " << min_max[i].second << ")" << std::endl;
+            if (*std::max_element(group.second.begin(), group.second.end()) == button)
+            {
+                int group_total = 0;
+                for (auto group_button : group.second)
+                {
+                    if (button == group_button)
+                        continue;
+                    group_button += presses[group_button];
+                }
+                min = std::max(group.first - group_total, min);
+                // std::cout << "got min for: " << group.first << " ";
+                // printIntVector(group.second, "[]");
+                // std::cout << " as: " << group.first - group_total << std::endl;
+            }
         }
+        return min;
+    }
 
-        return min_max;
+    int getMax(
+        std::vector<int> presses,
+        std::vector<std::pair<int, std::vector<int>>> groups,
+        int button)
+    {
+        int max = INT_MAX;
+        for (auto& group : groups)
+        {
+            if (std::find(
+                    group.second.begin(),
+                    group.second.end(),
+                    button
+                ) != group.second.end())
+            {
+                int group_total = 0;
+                for (auto group_button : group.second)
+                {
+                    if (button == group_button)
+                        continue;
+                    group_button += presses[group_button];
+                }
+                max = std::min(group.first - group_total, max);
+            }
+        }
+        return max;
     }
 
     int getMinAddSolve()
     {
         std::vector<int> solve(_add_req.size());
         std::vector<int> presses(_buttons.size());
-        std::vector<std::pair<int, int>> min_max = calcAddSolveMinMax();
+        std::vector<std::pair<int, std::vector<int>>> groups = calcAddGroups();
         std::cout << "Starting add search..." << std::endl;
+
+        std::vector<int> init_mins(presses.size());
+
+        for (auto& group : groups)
+        {
+            if (group.second.size() == 1)
+            {
+                init_mins[group.second[0]] = group.first;
+            }
+        }
 
         for (int i = 0; i < _buttons.size(); i++)
         {
-            pressAddButtonN(solve, _buttons[i], presses[i], min_max[i].first);
+            pressAddButtonN(solve, _buttons[i], presses[i], init_mins[i]);
         }
 
         int lowest_solve = INT_MAX;
         int checks = 0;
-        int i = 0;
+        int i = _buttons.size();
         while (true)
         {
             if (i < 0)
@@ -322,15 +366,14 @@ public:
                     std::cout << "solve found: " << total_presses << std::endl;
                 }
                 resetAddButton(solve, _buttons[i], presses[i]);
-                pressAddButtonN(solve, _buttons[i], presses[i], min_max[i].first);
                 i--;
                 if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
             }
-            else if ((presses[i] > min_max[i].second ||
+            else if ((presses[i] > getMax(presses, groups, i) ||
                 std::accumulate(presses.begin(), presses.end(), 0) >= lowest_solve))
             {
                 resetAddButton(solve, _buttons[i], presses[i]);
-                pressAddButtonN(solve, _buttons[i], presses[i], min_max[i].first);
+                pressAddButtonN(solve, _buttons[i], presses[i], init_mins[i]);
                 i--;
                 if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
             }
@@ -350,7 +393,7 @@ public:
                 else if (isSolved > 0)
                 {
                     resetAddButton(solve, _buttons[i], presses[i]);
-                    pressAddButtonN(solve, _buttons[i], presses[i], min_max[i].first);
+                    pressAddButtonN(solve, _buttons[i], presses[i], init_mins[i]);
                     i--;
                     if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
                 }
@@ -361,7 +404,7 @@ public:
                     if (total_presses < lowest_solve)
                         lowest_solve = total_presses;
                     resetAddButton(solve, _buttons[i], presses[i]);
-                    pressAddButtonN(solve, _buttons[i], presses[i], min_max[i].first);
+                    pressAddButtonN(solve, _buttons[i], presses[i], init_mins[i]);
                     i--;
                     if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
                     std::cout << "solve found: " << total_presses << std::endl;
