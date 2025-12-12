@@ -1,12 +1,11 @@
 
+#include <set>
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <iterator>
-#include <set>
 #include <vector>
 
 struct Tile
@@ -83,6 +82,38 @@ bool check_line(char **map, Tile start, Tile end, Tile step, char oob)
     return true;
 }
 
+bool any_edge_intersects(Tile& corner1, Tile& corner2, std::vector<Tile> tiles)
+{
+    Tile topleft = {std::min(corner1.x, corner2.x),
+        std::min(corner1.y, corner2.y)};
+    Tile botright = {std::max(corner1.x, corner2.x),
+        std::max(corner1.y, corner2.y)};
+
+    auto edge1 = tiles.begin();
+    auto edge2 = tiles.end() - 1;
+
+    for (; edge1 != tiles.end(); edge2 = edge1++)
+    {
+        if (edge1->x > topleft.x && edge1->x < botright.x)
+        {
+            if (edge1->y > topleft.y != edge2->y > topleft.y ||
+                edge1->y < botright.y != edge2->y < botright.y)
+            {
+                return true;
+            }
+        }
+        if (edge1->y > topleft.y && edge1->y < botright.y)
+        {
+            if (edge1->x > topleft.x != edge2->x > topleft.x ||
+                edge1->x < botright.x != edge2->x < botright.x)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 int main(int ac, char** av)
 {
     if (ac < 2)
@@ -102,6 +133,8 @@ int main(int ac, char** av)
     all_x.insert(0);
     all_y.insert(0);
 
+    Tile rightmost = {0, 0};
+
     // read file, take note of biggest values
     while (std::getline(input, line))
     {
@@ -112,7 +145,10 @@ int main(int ac, char** av)
         tiles.push_back({x, y});
         all_x.insert(x);
         all_y.insert(y);
+        if (x > rightmost.x)
+            rightmost = {x, y};
     }
+
 
     // create empty map
     int mapx = all_x.size()*2 + 2;
@@ -126,11 +162,13 @@ int main(int ac, char** av)
         map_ptr[row] = map[row];
     }
 
-    auto from = tiles.end() - 1;
+
+    auto from = tiles.end();
+    from--;
     auto to = tiles.begin();
 
     // mark lines in map
-    for (; to < tiles.end(); from = to++)
+    for (; to != tiles.end(); from = to++)
     {
         Tile adj_to = adj_tile(*to, all_x, all_y);
         Tile line = adj_tile(*from, all_x, all_y);
@@ -151,26 +189,62 @@ int main(int ac, char** av)
     //fill OOB
     flood_fill(map_ptr, mapx - 1, mapy, 'B', ' ');
 
+    auto rightmost_iter = std::find_if(tiles.begin(), tiles.end(), 
+        [rightmost](auto first){
+            return first.x == rightmost.x && first.y == rightmost.y;
+        });
+    auto rightmost_iter2 = rightmost_iter + 1;
+
+    if (rightmost_iter->y > rightmost_iter2->y)
+    {
+        std::reverse(tiles.begin(), tiles.end());
+    }
+
     // find rectangles
-    int64_t biggest_area = 0;
-    Tile biggest_corner1;
-    Tile biggest_corner2;
+    int64_t biggest = 0;
+
+    int64_t edge_biggest = 0;
+    Tile edge_big_corn1;
+    Tile edge_big_corn2;
+
+    int64_t map_biggest = 0;
+    Tile map_big_corn1;
+    Tile map_big_corn2;
+
     auto corner1 = tiles.begin();
     for (; corner1 != tiles.end() - 1; corner1++)
     {
-        auto corner2 = corner1 + 1;
+        auto corner2 = tiles.begin();
+        // // for inside detection
+        // auto prev_corner = corner1;
+        // prev_corner--;
+        // auto next_corner = corner2;
+
         for (; corner2 != tiles.end(); corner2++)
         {
-            // std::cout << std::endl;
-
             // get rectangle size
             int64_t area = std::abs((
                 corner1->x - corner2->x + 1) *
                 (corner1->y - corner2->y + 1));
 
+            // std::cout << "Checking:" << std::endl;
+            // std::cout << corner1->x << ", " << corner1->y << std::endl;
+            // std::cout << corner2->x << ", " << corner2->y << std::endl;
+
+
             // check if rectagle is bigger and lands on inside;
+            if (area > biggest)
+                biggest = area;
             Tile check = *corner1;
-            if (area > biggest_area &&
+            if (area > edge_biggest &&
+                !any_edge_intersects(*corner1, *corner2, tiles))
+            {
+                // std::cout << "new bigger" << std::endl;
+                edge_biggest = area;
+                edge_big_corn1 = *corner1;
+                edge_big_corn2 = *corner2;
+            }
+            if (area > map_biggest &&
                 check_line(map_ptr,
                     adj_tile({std::min(corner1->x, corner2->x), corner1->y}, all_x, all_y),
                     adj_tile({std::max(corner1->x, corner2->x), corner1->y}, all_x, all_y),
@@ -189,22 +263,33 @@ int main(int ac, char** av)
                     {0, 1}, ' '))
             {
                 // std::cout << "new bigger" << std::endl;
-                biggest_area = area;
-                biggest_corner1 = *corner1;
-                biggest_corner2 = *corner2;
+                map_biggest = area;
+                map_big_corn1 = *corner1;
+                map_big_corn2 = *corner2;
             }
         }
     }
 
-    std::cout << biggest_corner1.x << ", " << biggest_corner1.y << std::endl;
-    std::cout << biggest_corner2.x << ", " << biggest_corner2.y << std::endl;
+    // print map
+    edge_big_corn1 = adj_tile(edge_big_corn1, all_x, all_y);
+    edge_big_corn2 = adj_tile(edge_big_corn2, all_x, all_y);
+    map[edge_big_corn1.y][edge_big_corn1.x] = 'E';
+    map[edge_big_corn2.y][edge_big_corn2.x] = 'E';
 
-    biggest_corner1 = adj_tile(biggest_corner1, all_x, all_y);
-    biggest_corner2 = adj_tile(biggest_corner2, all_x, all_y);
-    map[biggest_corner1.y][biggest_corner1.x] = 'C';
-    map[biggest_corner2.y][biggest_corner2.x] = 'C';
+    map_big_corn1 = adj_tile(map_big_corn1, all_x, all_y);
+    map_big_corn2 = adj_tile(map_big_corn2, all_x, all_y);
+    map[map_big_corn1.y][map_big_corn1.x] = 'M';
+    map[map_big_corn2.y][map_big_corn2.x] = 'M';
+
+    Tile first = adj_tile(*tiles.begin(), all_x, all_y);
+    Tile last = adj_tile(tiles.back(), all_x, all_y);
+    map[first.y][first.x] = 'F';
+    map[last.y][last.x] = 'L';
+
     for (int row = 0; row < mapy; row++)
         std::cout << map[row] << std::endl;
 
-    std::cout << biggest_area << std::endl;
+    std::cout << "biggest: " << biggest << std::endl;
+    std::cout << "edge biggest: " << edge_biggest << std::endl;
+    std::cout << "map biggest: " << map_biggest << std::endl;
 }
