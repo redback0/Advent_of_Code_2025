@@ -212,7 +212,7 @@ int main(int ac, char** av)
     Tile map_big_corn2;
 
     auto corner1 = tiles.begin();
-    for (; corner1 != tiles.end() - 1; corner1++)
+    for (; corner1 != tiles.end(); corner1++)
     {
         auto corner2 = tiles.begin();
         // // for inside detection
@@ -223,9 +223,9 @@ int main(int ac, char** av)
         for (; corner2 != tiles.end(); corner2++)
         {
             // get rectangle size
-            int64_t area = std::abs((
-                corner1->x - corner2->x + 1) *
-                (corner1->y - corner2->y + 1));
+            int64_t area = 
+                (std::abs(corner1->x - corner2->x) + 1) *
+                (std::abs(corner1->y - corner2->y) + 1);
 
             // std::cout << "Checking:" << std::endl;
             // std::cout << corner1->x << ", " << corner1->y << std::endl;
@@ -233,6 +233,10 @@ int main(int ac, char** av)
 
 
             // check if rectagle is bigger and lands on inside;
+
+            if (area == 1473551379)
+                std::cout << "THIS ONE" << std::endl;
+
             if (area > biggest)
                 biggest = area;
             Tile check = *corner1;
