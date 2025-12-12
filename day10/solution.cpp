@@ -12,9 +12,12 @@
 void printIntVector(std::vector<int> vec, std::string brackets = "()")
 {
     std::cout << brackets[0];
-    for (auto num : vec)
-        std::cout << num << ", ";
-    std::cout << "\b\b" << brackets[1] << std::endl;
+    auto num = vec.begin();
+    if (vec.size() > 0)
+        std::cout << *num;
+    for (num++; num < vec.end(); num++)
+        std::cout << ", " << *num;
+    std::cout << brackets[1] << std::endl;
 }
 
 class Machine
@@ -272,7 +275,7 @@ public:
                 {
                     if (button == group_button)
                         continue;
-                    group_button += presses[group_button];
+                    group_total += presses[group_button];
                 }
                 min = std::max(group.first - group_total, min);
                 // std::cout << "got min for: " << group.first << " ";
@@ -327,89 +330,52 @@ public:
             }
         }
 
-        for (int i = 0; i < _buttons.size(); i++)
-        {
-            pressAddButtonN(solve, _buttons[i], presses[i], init_mins[i]);
-        }
+        // for (int i = 0; i < _buttons.size(); i++)
+        // {
+        //     pressAddButtonN(solve, _buttons[i], presses[i],
+        //         getMin(presses, groups, i));
+        // }
 
         int lowest_solve = INT_MAX;
+        int isSolved = -1;
+        int solve_size = 0;
         int checks = 0;
-        int i = _buttons.size();
-        while (true)
+        int i = 0;
+        while (i >= 0)
         {
-            if (i < 0)
-                break;
-            else if (i >= _buttons.size())
+            isSolved = -1;
+            solve_size = 0;
+            while (i < _buttons.size() && isSolved < 0 && solve_size < lowest_solve)
             {
-                i--;
-                int j = 0;
-                for (; j < _add_req.size(); j++)
-                    if (solve[j] < _add_req[j]) break;
-                int times_to_press =
-                    _add_req[_buttons[i][j]] - solve[_buttons[i][j]];
-                pressAddButtonN(solve, _buttons[i], presses[i], times_to_press);
-                int isSolved = isAddSolved(solve);
+                pressAddButtonN(solve, _buttons[i], presses[i],
+                    getMin(presses, groups, i));
+                solve_size = std::accumulate(presses.begin(), presses.end(), 0);
+                isSolved = isAddSolved(solve);
                 checks++;
+                i++;
+            }
+            i--;
+            int num_presses = getMax(presses, groups, i);
+            pressAddButtonN(solve, _buttons[i], presses[i], num_presses);
 
-                // std::cout << "BChecking: " << i << ", ";
-                // printIntVector(presses, "[]");
-                // printIntVector(solve);
+            // std::cout << i << std::endl;
+            // printIntVector(solve);
+            // printIntVector(_add_req, "[]");
+            // printIntVector(presses, "{}");
+            // std::cout << std::endl;
+            checks++;
+            if (isSolved == 0 && solve_size < lowest_solve)
+            {
+                lowest_solve = solve_size;
+            }
 
-                if (isSolved == 0)
-                {
-                    int total_presses = std::accumulate(
-                        presses.begin(), presses.end(), 0);
-                    if (total_presses < lowest_solve)
-                    {
-                        lowest_solve = total_presses;
-                    }
-                    std::cout << "solve found: " << total_presses << std::endl;
-                }
+            while (i >= 0 && presses[i] >= getMax(presses, groups, i))
+            {
                 resetAddButton(solve, _buttons[i], presses[i]);
                 i--;
-                if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
             }
-            else if ((presses[i] > getMax(presses, groups, i) ||
-                std::accumulate(presses.begin(), presses.end(), 0) >= lowest_solve))
-            {
-                resetAddButton(solve, _buttons[i], presses[i]);
-                pressAddButtonN(solve, _buttons[i], presses[i], init_mins[i]);
-                i--;
-                if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
-            }
-            else
-            {
-                int isSolved = isAddSolved(solve);
-                checks++;
-
-                // std::cout << "AChecking: " << i << ", ";
-                // printIntVector(presses, "[]");
-                // printIntVector(solve);
-
-                if (isSolved < 0)
-                {
-                    i = _buttons.size();
-                }
-                else if (isSolved > 0)
-                {
-                    resetAddButton(solve, _buttons[i], presses[i]);
-                    pressAddButtonN(solve, _buttons[i], presses[i], init_mins[i]);
-                    i--;
-                    if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
-                }
-                else
-                {
-                    int total_presses = std::accumulate(
-                        presses.begin(), presses.end(), 0);
-                    if (total_presses < lowest_solve)
-                        lowest_solve = total_presses;
-                    resetAddButton(solve, _buttons[i], presses[i]);
-                    pressAddButtonN(solve, _buttons[i], presses[i], init_mins[i]);
-                    i--;
-                    if (i >= 0) pressAddButton(solve, _buttons[i], presses[i]);
-                    std::cout << "solve found: " << total_presses << std::endl;
-                }
-            }
+            if (i >= 0)
+                pressAddButton(solve, _buttons[i], presses[i]);
         }
         std::cout << "lowest: " << lowest_solve
             << " with " << checks << " checks\n" << std::endl;
