@@ -6,16 +6,27 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <vector>
 
-void printIntVector(std::vector<int> vec, std::string brackets = "()")
+template<typename T>
+void printIntVector(std::vector<T>& vec, std::string brackets = "()")
 {
     std::cout << brackets[0];
     auto num = vec.begin();
+    
     if (vec.size() > 0)
+    {
+        if (*num == 0)
+            *num = 0;
         std::cout << *num;
+    }
     for (num++; num < vec.end(); num++)
+    {
+        if (*num == 0)
+            *num = 0;
         std::cout << ", " << *num;
+    }
     std::cout << brackets[1] << std::endl;
 }
 
@@ -33,6 +44,9 @@ private:
         GROUP_UNIQUE,
         GROUP_MIXED
     };
+
+    typedef std::pair<int, std::vector<double>> t_group_pair;
+    typedef std::vector<std::pair<int, std::vector<double>>> t_group;
 
 public:
     Machine(std::string details)
@@ -179,8 +193,8 @@ public:
     }
 
     bool isRemoveGroup(
-        std::pair<int, std::vector<int>>& from,
-        std::pair<int, std::vector<int>>& remove)
+        t_group_pair& from,
+        t_group_pair& remove)
     {
         // assume from < remove == false
         int i = 0;
@@ -212,12 +226,14 @@ public:
         return false;
     }
 
-    void orderGroups(std::vector<std::pair<int, std::vector<int>>>& groups)
+    void orderGroups(t_group& groups)
     {
         std::sort(groups.rbegin(), groups.rend(),
             [](auto& g1, auto& g2){
                 for (int i = 0; i < g1.second.size(); i++)
                 {
+                    if (g1.second[i] != 0 && g1.second[i] == g2.second[i])
+                        return g1.second[i] > g2.second[i];
                     if (g1.second[i] != g2.second[i])
                     {
                         if (g1.second[i] == 0)
@@ -231,29 +247,41 @@ public:
             });
     }
 
-    void removeGroup(
-        std::pair<int, std::vector<int>>& from,
-        std::pair<int, std::vector<int>>& remove)
+    void multGroup(
+        t_group_pair& group,
+        int mult)
     {
-        double multiplier = 0;
-        for (int i = 0; i < from.second.size(); i++)
+        group.first *= mult;
+        for (auto& num : group.second)
         {
-            if (from.second[i] != 0 && remove.second[i] != 0)
-            {
-                multiplier = (double)from.second[i] / remove.second[i];
-                break;
-            }
-        }
-
-        from.first -= remove.first * multiplier;
-
-        for (int i = 0; i < from.second.size(); i++)
-        {
-            from.second[i] -= remove.second[i] * multiplier;
+            num *= mult;
         }
     }
 
-    void simplifyGroup(std::pair<int, std::vector<int>>& group)
+    void removeGroup(
+        t_group_pair& from,
+        t_group_pair& remove)
+    {
+
+        int i = 0;
+        for (; i < from.second.size(); i++)
+        {
+            if (from.second[i] != 0 && remove.second[i] != 0)
+                break;
+        }
+
+        int mult = from.second[i];
+        multGroup(from, remove.second[i]);
+
+        from.first -= remove.first * mult;
+
+        for (int j = 0; j < from.second.size(); j++)
+        {
+            from.second[j] -= remove.second[j] * mult;
+        }
+    }
+
+    void simplifyGroup(t_group_pair& group)
     {
         int i = 0;
         for (; i < group.second.size(); i++)
@@ -264,16 +292,17 @@ public:
         if (i >= group.second.size())
             return;
 
+        auto div = group.second[i];
         group.first /= group.second[i];
-        for (int& num : group.second)
+        for (auto& num : group.second)
         {
-            num /= group.second[i];
+            num /= div;
         }
     }
 
-    std::vector<std::pair<int, std::vector<int>>> calcAddGroups()
+    t_group calcAddGroups()
     {
-        std::vector<std::pair<int, std::vector<int>>> groups(_add_req.size());
+        t_group groups(_add_req.size());
 
         for (int i = 0; i < _add_req.size(); i++)
         {
@@ -311,6 +340,8 @@ public:
             changed = false;
             for (int a = 0; a < groups.size() - 1; a++)
             {
+                // if (groups[a].first < 0)
+                //     simplifyGroup(groups[a]);
                 for (int b = a + 1; b < groups.size(); b++)
                 {
                     if (isRemoveGroup(groups[a], groups[b]))
@@ -328,27 +359,83 @@ public:
 
         // print groups
         // int total = 0;
-        // for (auto& group : groups)
-        // {
-        //     simplifyGroup(group);
-        //     total += group.first;
-        //     std::cout << group.first << " ";
-        //     printIntVector(group.second, "[]");
-        // }
+        for (auto& group : groups)
+        {
+            simplifyGroup(group);
+            // total += group.first;
+            std::cout << group.first << " ";
+            printIntVector(group.second, "[]");
+        }
 
         // std::cout << total << std::endl;
 
         return groups;
     }
 
+    std::vector<int> backSubstitute(t_group& groups)
+    {
+        std::vector<int> values(_buttons.size(), 0);
+        std::vector<int> gotValues(_buttons.size(), false);
+
+        for (int group = groups.size() - 1; group >= 0; group--)
+        {
+            int i = 0;
+            for (; i < groups[group].second.size(); i++)
+            {
+                if (groups[group].second[i] != 0)
+                    break;
+            }
+            if (i >= groups[group].second.size())
+                continue;
+
+            values[i] = groups[group].first * groups[group].second[i];
+            gotValues[i] = true;
+
+            for (int j = 1; j + i < groups[group].second.size(); j++)
+            {
+                if (!gotValues[i + j])
+                {
+                    // std::cout << "waaa" << std::endl;
+                    gotValues[i] = false;
+                }
+                values[i] -= values[i + j] * groups[group].second[i + j];
+            }
+        }
+
+        return values;
+    }
+
     int getMinAddSolve()
     {
-        std::vector<std::pair<int, std::vector<int>>> groups = calcAddGroups();
-        // std::cout << "Starting add search..." << std::endl;
+        t_group groups = calcAddGroups();
+        std::vector<int> multiples(_buttons.size());
+        std::vector<int> solve(_add_req.size());
+        int temp = 0;
+        
+        std::vector<int> presses = backSubstitute(groups);
 
-        int lowest_solve = 0;
-        for (auto& group : groups)
-            lowest_solve += group.first;
+        for (int i = 0; i < presses.size(); i++)
+        {
+            pressAddButtonN(solve, _buttons[i], temp, presses[i]);
+            if (presses[i] < 0)
+                std::cout << "o7" << std::endl;
+        }
+
+        if (isAddSolved(solve) != 0)
+            std::cout << "uh oh" << std::endl;
+
+        std::cout << "Presses: ";
+        printIntVector(presses, "{}");
+
+        std::cout << "Solve: ";
+        printIntVector(solve);
+
+        std::cout << "Req:   ";
+        printIntVector(_add_req);
+
+        int lowest_solve = std::accumulate(
+            presses.begin(), presses.end(), 0
+        );
 
         std::cout << "lowest: " << lowest_solve << std::endl;
         return lowest_solve;
