@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <numeric>
 #include <vector>
 
@@ -30,6 +31,15 @@ void printIntVector(std::vector<T>& vec, std::string brackets = "()")
     std::cout << brackets[1] << std::endl;
 }
 
+void printGroups(std::vector<std::pair<double, std::vector<double>>>& groups)
+{
+    for (auto& group : groups)
+    {
+        std::cout << group.first << " ";
+        printIntVector(group.second, "[]");
+    }
+}
+
 class Machine
 {
 private:
@@ -45,8 +55,8 @@ private:
         GROUP_MIXED
     };
 
-    typedef std::pair<int, std::vector<double>> t_group_pair;
-    typedef std::vector<std::pair<int, std::vector<double>>> t_group;
+    typedef std::pair<double, std::vector<double>> t_group_pair;
+    typedef std::vector<std::pair<double, std::vector<double>>> t_group;
 
 public:
     Machine(std::string details)
@@ -196,7 +206,6 @@ public:
         t_group_pair& from,
         t_group_pair& remove)
     {
-        // assume from < remove == false
         int i = 0;
         for (; i < from.second.size(); i++)
         {
@@ -249,7 +258,7 @@ public:
 
     void multGroup(
         t_group_pair& group,
-        int mult)
+        double mult)
     {
         group.first *= mult;
         for (auto& num : group.second)
@@ -262,7 +271,6 @@ public:
         t_group_pair& from,
         t_group_pair& remove)
     {
-
         int i = 0;
         for (; i < from.second.size(); i++)
         {
@@ -270,7 +278,7 @@ public:
                 break;
         }
 
-        int mult = from.second[i];
+        double mult = from.second[i];
         multGroup(from, remove.second[i]);
 
         from.first -= remove.first * mult;
@@ -317,8 +325,12 @@ public:
                 groups[num].second[i] = 1;
             }
         }
+        gaussianElimination(groups);
+        return groups;
+    }
 
-
+    void gaussianElimination(t_group& groups)
+    {
         // // print groups
         // for (auto& group : groups)
         // {
@@ -354,7 +366,6 @@ public:
                 if (changed)
                     break;
             }
-
         } while (changed);
 
         // print groups
@@ -363,19 +374,19 @@ public:
         {
             simplifyGroup(group);
             // total += group.first;
-            std::cout << group.first << " ";
-            printIntVector(group.second, "[]");
+            // std::cout.width(6);
+            // std::cout << group.first << " ";
+            // std::cout.width();
+            // printIntVector(group.second, "[]");
         }
+        // std::cout << std::endl;
 
         // std::cout << total << std::endl;
-
-        return groups;
     }
 
     std::vector<int> backSubstitute(t_group& groups)
     {
         std::vector<int> values(_buttons.size(), 0);
-        std::vector<int> gotValues(_buttons.size(), false);
 
         for (int group = groups.size() - 1; group >= 0; group--)
         {
@@ -389,15 +400,9 @@ public:
                 continue;
 
             values[i] = groups[group].first * groups[group].second[i];
-            gotValues[i] = true;
 
             for (int j = 1; j + i < groups[group].second.size(); j++)
             {
-                if (!gotValues[i + j])
-                {
-                    // std::cout << "waaa" << std::endl;
-                    gotValues[i] = false;
-                }
                 values[i] -= values[i + j] * groups[group].second[i + j];
             }
         }
@@ -405,19 +410,130 @@ public:
         return values;
     }
 
-    int getMinAddSolve()
+    bool checkPostive(const std::vector<int>& presses)
     {
-        t_group groups = calcAddGroups();
-        std::vector<int> multiples(_buttons.size());
+        for (auto press : presses)
+            if (press < 0)
+                return false;
+        return true;
+    }
+
+    bool checkPressesSolve(const std::vector<int>& presses)
+    {
         std::vector<int> solve(_add_req.size());
         int temp = 0;
-        
-        std::vector<int> presses = backSubstitute(groups);
-
         for (int i = 0; i < presses.size(); i++)
         {
             pressAddButtonN(solve, _buttons[i], temp, presses[i]);
             if (presses[i] < 0)
+                std::cout << "o7" << std::endl;
+        }
+        return isAddSolved(solve) == 0;
+    }
+
+    int getMinAddSolve()
+    {
+        t_group groups = calcAddGroups();
+        int temp = 0;
+
+        std::map<int, int> unknowns;
+
+        // find unknowns
+        for (auto& group : groups)
+        {
+            int i = 0;
+            for (; i < group.second.size(); i++)
+                if (group.second[i] != 0)
+                    break;
+
+            for (i++; i < group.second.size(); i++)
+            {
+                if (group.second[i] != 0)
+                    unknowns.insert({i, INT_MAX});
+            }
+        }
+
+        t_group extra_groups;
+
+        // create groups for unknowns
+        for (auto& unknown : unknowns)
+        {
+            std::vector<double> new_group(_buttons.size());
+
+            new_group[unknown.first] = 1;
+            extra_groups.push_back({0, new_group});
+
+            for (auto req : _buttons[unknown.first])
+            {
+                unknown.second = std::min(_add_req[req], unknown.second);
+            }
+        }
+
+        std::vector<int> presses;
+        std::vector<int> best_presses;
+        auto groups_save = groups;
+
+        // iterate through all possible values of unknowns
+        auto unknown = unknowns.begin();
+        auto ex_group = extra_groups.begin();
+        int lowest_solve = INT_MAX;
+        if (unknown != unknowns.end())
+        {
+            for (;;)
+            {
+                while (ex_group->first <= unknown->second)
+                {
+                    groups.insert(groups.end(), extra_groups.begin(), extra_groups.end());
+                    gaussianElimination(groups);
+                    presses = backSubstitute(groups);
+                    int total_presses = std::accumulate(presses.begin(), presses.end(), 0);
+                    if (total_presses < lowest_solve &&
+                        checkPostive(presses) &&
+                        checkPressesSolve(presses))
+                    {
+                        best_presses = presses;
+                        lowest_solve = total_presses;
+                        // for (auto& group : groups)
+                        // {
+                        //     std::cout << group.first << " ";
+                        //     printIntVector(group.second, "[]");
+                        // }
+                    }
+                    groups = groups_save;
+                    ex_group->first++;
+                }
+
+                ex_group->first = 0;
+
+                unknown++;
+                ex_group++;
+
+                while (ex_group < extra_groups.end() &&
+                    ex_group->first >= unknown->second)
+                {
+                    ex_group->first = 0;
+                    unknown++;
+                    ex_group++;
+                }
+                if (ex_group >= extra_groups.end())
+                    break;
+                ex_group->first++;
+                unknown = unknowns.begin();
+                ex_group = extra_groups.begin();
+            }
+        }
+        else
+        {
+            best_presses = backSubstitute(groups);
+            lowest_solve = std::accumulate(
+                best_presses.begin(), best_presses.end(), 0);
+        }
+
+        std::vector<int> solve(_add_req.size());
+        for (int i = 0; i < best_presses.size(); i++)
+        {
+            pressAddButtonN(solve, _buttons[i], temp, best_presses[i]);
+            if (best_presses[i] < 0)
                 std::cout << "o7" << std::endl;
         }
 
@@ -425,17 +541,13 @@ public:
             std::cout << "uh oh" << std::endl;
 
         std::cout << "Presses: ";
-        printIntVector(presses, "{}");
+        printIntVector(best_presses, "{}");
 
         std::cout << "Solve: ";
         printIntVector(solve);
 
         std::cout << "Req:   ";
         printIntVector(_add_req);
-
-        int lowest_solve = std::accumulate(
-            presses.begin(), presses.end(), 0
-        );
 
         std::cout << "lowest: " << lowest_solve << std::endl;
         return lowest_solve;
@@ -456,12 +568,16 @@ int main(int ac, char** av)
     int count_toggle_presses = 0;
     int64_t count_add_presses = 0;
 
+    int i = 1;
+
     while (std::getline(input, line))
     {
+        std::cout << "Machine " << i++ << std::endl;
         Machine machine(line);
 
         count_toggle_presses += machine.getMinToggleSolve();
         count_add_presses += machine.getMinAddSolve();
+        std::cout << std::endl;
     }
 
     std::cout << "toggle total: " << count_toggle_presses << std::endl;
