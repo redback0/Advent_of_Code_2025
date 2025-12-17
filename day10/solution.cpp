@@ -541,16 +541,16 @@ public:
         if (isAddSolved(solve) != 0)
             std::cout << "uh oh" << std::endl;
 
-        std::cout << "Presses: ";
-        printIntVector(best_presses, "{}");
+        // std::cout << "Presses: ";
+        // printIntVector(best_presses, "{}");
 
-        std::cout << "Solve: ";
-        printIntVector(solve);
+        // std::cout << "Solve: ";
+        // printIntVector(solve);
 
-        std::cout << "Req:   ";
-        printIntVector(_add_req);
+        // std::cout << "Req:   ";
+        // printIntVector(_add_req);
 
-        std::cout << "lowest: " << lowest_solve << std::endl;
+        // std::cout << "lowest: " << lowest_solve << std::endl;
         return lowest_solve;
     }
 };
@@ -573,12 +573,12 @@ int main(int ac, char** av)
 
     while (std::getline(input, line))
     {
-        std::cout << "Machine " << i++ << std::endl;
+        // std::cout << "Machine " << i++ << std::endl;
         Machine machine(line);
 
         count_toggle_presses += machine.getMinToggleSolve();
         count_add_presses += machine.getMinAddSolve();
-        std::cout << std::endl;
+        // std::cout << std::endl;
     }
 
     std::cout << "toggle total: " << count_toggle_presses << std::endl;
