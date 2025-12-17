@@ -35,9 +35,12 @@ void printGroups(std::vector<std::pair<double, std::vector<double>>>& groups)
 {
     for (auto& group : groups)
     {
+        auto before = std::cout.width(8);
         std::cout << group.first << " ";
+        std::cout.width(before);
         printIntVector(group.second, "[]");
     }
+    std::cout << std::endl;
 }
 
 class Machine
@@ -399,7 +402,8 @@ public:
             if (i >= groups[group].second.size())
                 continue;
 
-            values[i] = groups[group].first * groups[group].second[i];
+            double prevalue = groups[group].first * groups[group].second[i];
+            values[i] = prevalue + (prevalue > 0 ? 0.001 : -0.001);
 
             for (int j = 1; j + i < groups[group].second.size(); j++)
             {
@@ -434,6 +438,7 @@ public:
     int getMinAddSolve()
     {
         t_group groups = calcAddGroups();
+        // printGroups(groups);
         int temp = 0;
 
         std::map<int, int> unknowns;
@@ -493,11 +498,7 @@ public:
                     {
                         best_presses = presses;
                         lowest_solve = total_presses;
-                        // for (auto& group : groups)
-                        // {
-                        //     std::cout << group.first << " ";
-                        //     printIntVector(group.second, "[]");
-                        // }
+                        // printGroups(groups);
                     }
                     groups = groups_save;
                     ex_group->first++;
